@@ -1,0 +1,13 @@
+{
+  "__version__": "1.0.6",
+  "layer": [
+    {
+      "name": "SceneLayer",
+      "value": 1
+    },
+    {
+      "name": "RenderTextureLayer",
+      "value": 2
+    }
+  ]
+}

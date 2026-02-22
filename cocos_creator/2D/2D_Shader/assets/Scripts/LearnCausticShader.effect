@@ -1,0 +1,188 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: sprite-vs:vert
+      frag: sprite-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+      properties:
+        alphaThreshold: { value: 0.5 }
+        tiling: {value: [1.0, 0.5]}
+        rippleDirection: {value: [0.5, 0.5], editor: {parent: USE_RIPPLE, slide: true, range: [0, 1.0], step: 0.01}}
+        rippleSpeed: {value: 1.0, editor: {parent: USE_RIPPLE, slide: true, range: [0, 10.0], step: 0.01}}
+        rippleStrength: {value: 1.0, editor: {parent: USE_RIPPLE, slide: true, range: [0, 10.0], step: 0.01}}
+        rippleTexture: {value: white, editor: {parent: USE_RIPPLE}}
+        rippleTiling: {value: [1.0, 1.0], editor: {parent: USE_RIPPLE}}
+
+        causticStrength: {value: 1.0, target: causticParams1.x, editor: {parent: USE_CAUSTIC, slider: {true, slide: true, range: [0, 1.0], step: 0.01}}}
+        causticScale: {value: 1.0, target: causticParams1.y, editor: {parent: USE_CAUSTIC, slider: {true, slide: true, range: [0, 10.0], step: 0.01}}}
+        causticSpeed: {value: 1.0, target: causticParams1.z, editor: {parent: USE_CAUSTIC, slider: {true, slide: true, range: [-10, 10.0], step: 0.01}}}
+        causticRGBSplit: {value: 0.5, target: causticParams1.w, editor: {parent: USE_CAUSTIC, slider: {true, slide: true, range: [0, 1.0], step: 0.01}}}
+        causticDepth: {value: 1.0, editor: {parent: USE_CAUSTIC, slider: {true, slide: true, range: [0, 10.0], step: 0.01}}}
+        causticColor: {value: [1.0, 1.0, 1.0, 1.0], editor: {parent: USE_CAUSTIC, type: color}}
+        causticTexture: {value: white, editor: {parent: USE_CAUSTIC}}
+        colorStepUV: {value: 1.0, editor: {parent: USE_COLOR_STEP, slide: true, range: [0, 10.0], step: 0.01}}
+        alphaStepUV: {value: 1.0, editor: {parent: USE_COLOR_STEP, slide: true, range: [0, 10.0], step: 0.01}}
+}%
+
+CCProgram sprite-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  #if SAMPLE_FROM_RT
+    #include <common/common-define>
+  #endif
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec4 a_color;
+
+  out vec4 color;
+  out vec2 uv0;
+
+  #if USE_TILING
+    uniform VSParams {
+      vec2 tiling;
+    };
+  #endif
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+
+    uv0 = a_texCoord;
+    #if USE_TILING
+      uv0 *= tiling;
+    #endif
+   
+    #if SAMPLE_FROM_RT
+      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
+    #endif
+    color = a_color;
+
+    return pos;
+  }
+}%
+
+CCProgram sprite-fs %{
+  precision highp float;
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+  #include <builtin/uniforms/cc-global>
+
+  #define PI 3.14159265359
+
+  in vec4 color;
+
+  #if USE_TEXTURE
+    in vec2 uv0;
+    #pragma builtin(local)
+    layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
+  #endif
+
+  #if USE_RIPPLE
+    uniform RippleParams {
+      vec2 rippleDirection;
+      vec2 rippleTiling;
+      float rippleSpeed;
+      float rippleStrength;
+    };
+
+    uniform sampler2D rippleTexture;
+  #endif
+
+  #if USE_CAUSTIC
+    uniform CausticParam {
+      vec4 causticParams1;
+      vec4 causticColor;
+      float causticDepth;
+    };
+
+    uniform sampler2D causticTexture;
+
+    vec2 panner(vec2 uv, float direction, float speed, vec2 offset, float tiling) {
+      direction = direction * 2.0 - 1.0;
+      vec2 dir = normalize(vec2(cos(PI * direction), sin(PI * direction)));
+
+      return fract((uv * tiling) + (cc_time.x * speed * dir));
+    }
+
+    vec3 myRgbShift(float split, sampler2D tex, vec2 uv){
+      vec2 UVR = uv;// * vec2(split, split);
+      vec2 UVG = uv;// * vec2(split, -split);
+      vec2 UVB = uv;// * vec2(-split, -split);
+
+      float r = texture(tex, UVR).r;
+      float g = texture(tex, UVG).g;
+      float b = texture(tex, UVB).b;
+
+      return vec3(r, g, b);
+    }
+
+    vec3 causticEffect() {
+      vec2 uv = uv0;
+
+      float strength = causticParams1.x;
+      float scale = causticParams1.y;
+      float speed = causticParams1.z;
+      float split = causticParams1.w;// * 0.8;
+
+      vec3 color1 = myRgbShift(split, causticTexture, panner(uv, 1.0, speed, vec2(0.1), scale));
+      vec3 color2 = myRgbShift(split, causticTexture, panner(uv, 1.0, speed, vec2(0.2), scale));
+
+      vec3 colorCombined = min(color1, color2);
+
+      return colorCombined * strength;// * 10.0;
+    }
+  #endif
+
+  #if USE_COLOR_STEP
+    uniform ColorStepParams {
+      float colorStepUV;
+      float alphaStepUV;
+    };
+  #endif
+
+  vec4 frag () {
+    vec2 uv = uv0;
+    #if USE_RIPPLE
+      float rippleTime = cc_time.x * rippleSpeed;
+      vec2 rippleUV = uv * rippleTiling;
+      vec2 offset = texture(rippleTexture, rippleUV + rippleTime * rippleDirection).xy  * rippleStrength;
+      uv += offset;
+    #endif
+
+    #if USE_TEXTURE
+      vec4 o = texture(cc_spriteTexture, uv);
+    #endif
+
+    #if USE_CAUSTIC
+      o.rgb += causticEffect() * causticColor.rgb;
+    #endif
+
+
+    return o;
+  }
+}%

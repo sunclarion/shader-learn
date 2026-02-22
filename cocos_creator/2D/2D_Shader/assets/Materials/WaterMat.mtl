@@ -1,0 +1,57 @@
+{
+  "__type__": "cc.Material",
+  "_name": "",
+  "_objFlags": 0,
+  "__editorExtras__": {},
+  "_native": "",
+  "_effectAsset": {
+    "__uuid__": "ab87a10c-8ffb-4ac1-a598-2877006b6b5f",
+    "__expectedType__": "cc.EffectAsset"
+  },
+  "_techIdx": 0,
+  "_defines": [
+    {
+      "USE_TEXTURE": true,
+      "USE_RIPPLE": true,
+      "USE_CAUSTIC": true
+    }
+  ],
+  "_states": [
+    {
+      "rasterizerState": {},
+      "depthStencilState": {},
+      "blendState": {
+        "targets": [
+          {}
+        ]
+      }
+    }
+  ],
+  "_props": [
+    {
+      "rippleDirection": {
+        "__type__": "cc.Vec2",
+        "x": 1,
+        "y": 0.5
+      },
+      "rippleSpeed": 0.03,
+      "rippleStrength": 0.025,
+      "rippleTexture": {
+        "__uuid__": "82aea73a-f9fc-46dd-ab5c-0efdb699f7a5@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      },
+      "rippleTiling": {
+        "__type__": "cc.Vec2",
+        "x": 2,
+        "y": 2
+      },
+      "causticStrength": 0.5,
+      "causticSpeed": 0.001,
+      "causticRGBSplit": 0.4,
+      "causticTexture": {
+        "__uuid__": "2d5605b9-ba6a-4a23-b73a-0f62ebe391a3@6c48a",
+        "__expectedType__": "cc.Texture2D"
+      }
+    }
+  ]
+}
