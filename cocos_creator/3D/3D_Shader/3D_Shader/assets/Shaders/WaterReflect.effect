@@ -50,11 +50,14 @@ CCProgram unlit-fs %{
   };
 
   vec4 frag () {
+    // add noise to the reflection direction to create a wavy effect
     float T = texture(noiseTexture, v_uv + v_position.xz * 0.4 + cc_time.x * 0.05).r;
     vec3 N = normalize(v_normal);
     vec3 V = normalize(v_position - cc_cameraPos.xyz);
+    //reflection formula
     vec3 R = (V - 2.0 * dot(V, N) * N) + T * 0.03;
     vec4 reflectColor = texture(reflectTexture, R);
+    //Simplified Fresnel reflection formula
     float fresnel = pow(1.0 - dot(N, -V), fresnelPow);
     vec4 col = mainColor * texture(mainTexture, v_uv);
     col.rgb = mix(col.rgb, reflectColor.rgb, fReflect * fresnel);

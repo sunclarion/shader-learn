@@ -1,0 +1,83 @@
+// Effect Syntax Guide: https://docs.cocos.com/creator/manual/zh/shader/index.html
+
+CCEffect %{
+  techniques:
+  - name: opaque
+    passes:
+    - vert: vs
+      frag: unlit-fs:frag
+      properties: &props
+        mainTexture:    { value: white }
+        mainColor:      { value: [1, 1, 1, 1], editor: { type: color } }
+        rimStrength: {value: 0.5}
+        rimColor: {value: [1, 1, 1, 1], editor: {type: color}}
+        rimThreshold: {value: 3.0, editor: {slide: true, range: [0.0, 10.0], step: 0.1}}
+
+  - name: transparent
+    passes:
+    - vert: vs #general-vs:vert # builtin header
+      frag: unlit-fs:frag
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendSrcAlpha: src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      properties: *props
+}%
+
+CCProgram vs %{
+  precision highp float;
+  #include <cc-global>
+  #include <cc-local>
+
+  in vec3 a_position;
+  in vec2 a_texCoord;
+  in vec3 a_normal;
+
+  out vec3 v_view_normal;
+  out vec2 v_uv;
+  out vec3 v_position;
+  out vec3 v_normal;
+
+  void main() {
+    vec4 normal = vec4(a_normal, 0.0);//转换3维法线到4维。
+    v_normal = normalize((cc_matWorldIT * normal).xyz);//计算世界空间下的法线
+    v_view_normal = normalize((cc_matView * cc_matWorldIT * normal).xyz);//计算摄像机空间下的法线
+
+    gl_Position = cc_matViewProj * cc_matWorld * vec4(a_position, 1.0);
+    //v_view_normal = cc_matView * v_position
+    //v_view_normal = mat()
+  }
+}%
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+  #include <legacy/fog-fs>
+
+  in vec2 v_uv;
+  in vec3 v_position;
+  in vec3 v_normal;
+  in vec3 v_view_normal;
+
+  uniform sampler2D mainTexture;
+ 
+  uniform Constant {
+    vec4 mainColor;
+    vec4 rimColor;
+    float rimStrength;
+    float rimThreshold;
+  };
+
+  vec4 frag () {
+    vec4 col = mainColor * texture(mainTexture, v_uv);
+    float fRim = max(0.0, 1.0 - dot(v_view_normal, vec3(0, 0, 1.0)));//0 -- 1
+    fRim = pow(fRim, rimThreshold);
+    fRim *= rimStrength;
+    col = mix(col, rimColor, fRim);
+    //CC_APPLY_FOG(col, v_position);
+    return CCFragOutput(col);
+  }
+}%
